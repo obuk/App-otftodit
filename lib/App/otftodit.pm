@@ -29,7 +29,7 @@ use strict;
 
 use feature 'say';
 
-our $VERSION = "0.01";
+our $VERSION = "0.02";
 
 use Carp qw(confess);
 use Encode;
@@ -1981,7 +1981,7 @@ __END__
 
 =head1 NAME
 
-App::otftodit - It's new $module
+App::otftodit - adapt OpenType/CFF for gropdf-otf
 
 =head1 SYNOPSIS
 
@@ -1989,7 +1989,7 @@ App::otftodit - It's new $module
 
 =head1 DESCRIPTION
 
-App::otftodit is ...
+App::otftodit creates groff font description files for App-gropdf-plus.
 
 =head1 LICENSE
 

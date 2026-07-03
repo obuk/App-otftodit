@@ -1,0 +1,14 @@
+#!/usr/bin/env perl
+
+=encoding utf-8
+
+=head1 NAME
+
+otftodit \- 
+
+=head1 SYNOPSYS
+
+=cut
+
+use App::otftodit;
+exit(App::otftodit->run);

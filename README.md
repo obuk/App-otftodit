@@ -1,7 +1,7 @@
-
+[![Actions Status](https://github.com/obuk/App-otftodit/actions/workflows/test.yml/badge.svg?branch=master)](https://github.com/obuk/App-otftodit/actions?workflow=test)
 # NAME
 
-App::otftodit - It's new $module
+App::otftodit - adapt OpenType/CFF for gropdf-otf
 
 # SYNOPSIS
 
@@ -9,7 +9,7 @@ App::otftodit - It's new $module
 
 # DESCRIPTION
 
-App::otftodit is ...
+App::otftodit creates groff font description files for App-gropdf-plus.
 
 # LICENSE
 

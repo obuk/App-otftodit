@@ -1,5 +1,5 @@
 {
-   "abstract" : "It's new $module",
+   "abstract" : "adapt OpenType/CFF for gropdf-otf",
    "author" : [
       "KUBO, Koichi <k@obuk.org>"
    ],
@@ -61,7 +61,18 @@
       }
    },
    "release_status" : "unstable",
-   "version" : "0.01",
+   "resources" : {
+      "bugtracker" : {
+         "web" : "https://github.com/obuk/App-otftodit/issues"
+      },
+      "homepage" : "https://github.com/obuk/App-otftodit",
+      "repository" : {
+         "type" : "git",
+         "url" : "https://github.com/obuk/App-otftodit.git",
+         "web" : "https://github.com/obuk/App-otftodit"
+      }
+   },
+   "version" : "0.02",
    "x_serialization_backend" : "JSON::PP version 4.06",
    "x_static_install" : 1
 }
