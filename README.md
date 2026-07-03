@@ -1,4 +1,4 @@
-[![Actions Status](https://github.com/obuk/App-otftodit/actions/workflows/test.yml/badge.svg?branch=master)](https://github.com/obuk/App-otftodit/actions?workflow=test)
+[![Actions Status](https://github.com/obuk/App-otftodit/actions/workflows/test.yml/badge.svg?branch=main)](https://github.com/obuk/App-otftodit/actions?workflow=test)
 # NAME
 
 App::otftodit - adapt OpenType/CFF for gropdf-otf
