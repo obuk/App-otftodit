@@ -46,11 +46,9 @@
             "Class::Tiny" : "0",
             "Encode" : "0",
             "Font::TTF" : "0",
+            "Font::TTF::CFF_" : "0",
+            "Font::TTF::Cmap::Uvs" : "0",
             "Getopt::Long" : "0",
-            "Imager" : "0",
-            "List::Util" : "0",
-            "Math::Bezier::Convert" : "0",
-            "POSIX" : "0",
             "perl" : "5.008001"
          }
       },

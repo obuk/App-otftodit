@@ -36,11 +36,12 @@ use Encode;
 use List::Util qw(max min);
 
 use Font::TTF::Font;
-use App::otftodit::BBox;
-use App::otftodit::Plot;
+use Font::TTF::Cmap::Uvs;	# https://github.com/obuk/Font-TTF-Cmap-Uvs.git
+use Font::TTF::CFF_;		# https://github.com/obuk/Font-TTF-CFF_.git
+use Font::TTF::CFF_::BBox;
+use Font::TTF::CFF_::Plot;
 use App::otftodit::Unicode qw(:all);
-
-use Unicode::UCD qw/charblocks/;
+#use Unicode::UCD qw/charblocks/;
 
 sub run {
     my $class = shift;
@@ -281,6 +282,8 @@ sub verify {
 	: { };
     my ($k, $got) = @_;
     my $expected = eval "\$$k";
+    $expected = "@$expected"if ref $expected; # xxxxx
+    $got = "@$got"if ref $got; # xxxxx
     my $cond;
     if ($got =~ /^[+-]?[\d.]+$/) { # number expected
 	if (defined $expected && $expected =~ /^[+-]?\d+$/) {
@@ -312,11 +315,10 @@ sub verify {
 
 sub read_afm_file {
     our $opt_verify;
-    my $vopts = { e => 5 };
 
     unless ($afmfile) {
 	if ($opt_verify) {
-	    warn "$program_name: cannot verify; also specify afm.\n";
+	    warn "$program_name: cannot verify; specify afm.\n";
 	    $opt_verify = 0;
 	}
 	return undef;
@@ -341,36 +343,39 @@ while (<AFM>) {
 	if($opt_f) {
 	    $psname = $opt_f;
 	}
-	verify $vopts, psname => $psname or
+	verify psname => $psname or
 	    croak "$afmfile does not match $field[0] of $otffile"
 	    if $opt_verify;
     }
     elsif($field[0] eq "Notice") {
 	my $notice = $_;
-	verify $vopts, notice => "@field[1..$#field]" if $opt_verify;
+	verify notice => "@field[1..$#field]" if $opt_verify;
+    }
+    elsif($field[0] eq "FontBBox") {
+	$fontbbox = [ @field[1..$#field] ];
     }
     elsif($field[0] eq "Version") {
 	my $version = $_;
-	verify $vopts, version => $field[1] if $opt_verify;
+	verify version => $field[1] if $opt_verify;
     }
     elsif($field[0] eq "FullName") {
 	my $fullname = $_;
-	verify $vopts, fullname => $fullname if $opt_verify;
+	verify fullname => $fullname if $opt_verify;
     }
     elsif($field[0] eq "FamilyName") {
 	my $familyname = $_;
-	verify $vopts, familyname => $familyname if $opt_verify;
+	verify familyname => $familyname if $opt_verify;
     }
     elsif($field[0] eq "CharacterSet") {
 	my $characterset = $field[1];
-	verify $vopts, characterset => $characterset if $opt_verify;
+	verify characterset => $characterset if $opt_verify;
     }
     elsif($field[0] eq "Comment") {
 	push(@comments, $_);
     }
     elsif($field[0] eq "IsCIDFont") {
 	my $iscidfont = lc($field[1]) eq 'true';
-	verify $vopts, iscidfont => $iscidfont if $opt_verify;
+	verify iscidfont => $iscidfont if $opt_verify;
     }
     elsif($field[0] eq "ItalicAngle") {
 	$italic_angle = -$field[1];
@@ -592,9 +597,9 @@ $lineno = 0;
 
 
 sub read_otf_file {
+    #Font::TTF::Font->AddTable('CFF ' => 'Font::TTF::CFF_::Plot'); # xxxxx
     $otf = Font::TTF::Font->open($otffile) or
-	croak "can't open $fontfile\n";
-
+	croak "can't open $otffile\n";
     $otf->{'CFF '}->read;
     my $cff = $otf->{'CFF '};
     if ($cff->TopDICT) {
@@ -608,7 +613,7 @@ sub read_otf_file {
 	$version    = $cff->TopDICT->{CIDFontVersion};
 	$psname     = $cff->TopDICT->{FontName};
 	$weight     = $cff->TopDICT->{Weight};
-	$fontbbox   = $cff->TopDICT->{FontBBox};
+	#$fontbbox   = $cff->TopDICT->{FontBBox};
     }
 
     $notice     //= get_name($otf, 0);
@@ -617,7 +622,7 @@ sub read_otf_file {
     $fullname   //= get_name($otf, 4);
     $version    //= get_name($otf, 5);
     $psname     //= get_name($otf, 6);
-    $fontbbox   //= [ map $otf->{'head'}->{$_}, qw/xMin yMin xMax yMax/ ];
+    #$fontbbox   //= [ map $otf->{'head'}->{$_}, qw/xMin yMin xMax yMax/ ];
 
     if ($notice) {
 	$notice =~ s/\xA9/(C)/g;
@@ -639,7 +644,11 @@ sub read_otf_file {
 	my $cid = $gid2cid->[$gid];
 	$cid2gid->[$cid] = $gid if defined $cid;
     }
-    $otf->{cmap}->read;
+
+#    unless ($otf->{'cmap'}->can('find_uvs')) {
+#	Font::TTF::Font->AddTable('cmap' => 'Font::TTF::Cmap::Uvs');
+#    }
+    $otf->{'cmap'}->read;
     my $uv_gid = $otf->{'cmap'}->find_ms->{val};
     $gid_space = $uv_gid->{0x20};
     $cid_space = $gid2cid->[$gid_space];
@@ -696,10 +705,12 @@ sub read_otf_file_p2 {
     # StartCharMetrics .. EndCharMetrics
 
     my $cff = $otf->{'CFF '};
-    my $pen = App::otftodit::BBox->new(bezier_extrema => 1);
+    bless $cff, 'Font::TTF::CFF_::BBox';
+    $cff->bezier_extrema(1);
     die "can't run plot" unless $cff->can('plot');
 
-    my %stdbbox;
+=begin comment
+
     my %stdenc;
     for my $sid (@{$cff->StandardEncoding}) {
 	my $name = $cff->StandardStrings->[$sid];
@@ -711,6 +722,12 @@ sub read_otf_file_p2 {
 	    $stdenc{$gid} = $name;
 	}
     }
+
+=end comment
+
+=cut
+
+    my $fontbbox2;
 
     %n2c = ();
     for my $gid (0 .. $#{$gid2cid}) {
@@ -755,7 +772,7 @@ sub read_otf_file_p2 {
 
 	my ($llx, $lly, $urx, $ury);
 	our $opt_verify;
-	if ($opt_verify || !$afmfile || %opt_bbox_cid) {
+	if ($opt_verify || $opt_mafm || !$afmfile || %opt_bbox_cid) {
 
 	    # $llx = $lsb;
 	    # $lly = $descender;
@@ -763,16 +780,21 @@ sub read_otf_file_p2 {
 	    # #$ury = $ascender;
 	    # $ury = $ascender - $top;
 
-	    $pen->init;
-	    $cff->plot($gid, $pen);
-	    if ($pen->can('bbox')) {
-		for (scalar $pen->bbox) {
+	    $cff->init;
+	    $cff->plot($gid);
+	    if ($cff->can('bbox')) {
+		for (scalar $cff->bbox) {
 		    ($llx, $lly, $urx, $ury) = @$_ if ref;
 		}
 	    }
 
-	    if ($stdenc{$gid}) {
-		$stdbbox{$gid} = [ $llx, $lly, $urx, $ury ];
+	    if (ref $fontbbox2) {
+		$fontbbox2 = [ min($llx, $fontbbox2->[0]),
+			       min($lly, $fontbbox2->[1]),
+			       max($urx, $fontbbox2->[2]),
+			       max($ury, $fontbbox2->[3]), ];
+	    } else {
+		$fontbbox2 = [ $llx, $lly, $urx, $ury ];
 	    }
 
 	    my ($o_llx, $o_lly) = ($llx, $lly);
@@ -800,7 +822,7 @@ sub read_otf_file_p2 {
 
 	    my $not_ok = 0;
 	    if ($opt_verify && $afmfile) {
-		my $vopts = { e => 5 };
+		my $vopts = { e => 1 };
 		$not_ok++ unless verify $vopts, "width{$n}" => $w;
 		$not_ok++ unless verify $vopts, "height{$n}" => $ury;
 		$not_ok++ unless verify $vopts, "depth{$n}" => -$lly;
@@ -820,54 +842,33 @@ sub read_otf_file_p2 {
 		    "B $llx $lly $urx $ury";
 	    }
 	    if ($not_ok || $opt_bbox_cid{$n}) {
-		my $pen = App::otftodit::Plot->new;
+		my $pen = bless $cff, 'Font::TTF::CFF_::Plot';
 		$pen->init;
-		if ($pen->can('image')) {
-		    $pen->image->polyline(
-			points => [
-			    map [ $pen->mmul($_) ],
-			    [ 0  - $o, $descender ],
-			    [ $w - $o, $descender ],
-			    [ $w - $o, $ascender  ],
-			    [ 0  - $o, $ascender  ],
-			    [ 0  - $o, $descender ],
-			],
-			color => Imager::Color->new(
-			    map { ($_ >> 16) & 0xff, ($_ >> 8) & 0xff, $_  & 0xff }
-			    0x87cefa, # .defcolor lightskyblue rgb #87cefa
-			    # 0xb0e2ff, # .defcolor lightskyblue1 rgb #b0e2ff
-			    # 0xa4d3ee, # .defcolor lightskyblue2 rgb #a4d3ee
-			    # 0x8db6cd, # .defcolor lightskyblue3 rgb #8db6cd
-			    # 0x607b8b, # .defcolor lightskyblue4 rgb #607b8b
-			), # sky blue
-		    );
-		    if ($afmfile) {
-			# OTF
-			my $llx = -$left_side_bearing{$n};
-			my $lly = -$depth{$n};
-			my $urx = $width{$n} + $right_side_bearing{$n};
-			my $ury = $height{$n};
-			$pen->image->polyline(
-			    points => [
-				map [ $pen->mmul($_) ],
-				[ $llx, $lly ],
-				[ $urx, $lly ],
-				[ $urx, $ury ],
-				[ $llx, $ury ],
-				[ $llx, $lly ],
-			    ],
-			    color => Imager::Color->new(
-				# 255, 255, 0 # yellow
-				map { ($_ >> 16) & 0xff, ($_ >> 8) & 0xff, $_  & 0xff }
-				0xffa500, # .defcolor orange rgb #ffa500
-				#0xffa500, # .defcolor orange1 rgb #ffa500
-				#0xee9a00, # .defcolor orange2 rgb #ee9a00
-				#0xcd8500, # .defcolor orange3 rgb #cd8500
-				#0x8b5a00, # .defcolor orange4 rgb #8b5a00
-			    ),
-			);
-		    }
-		    # AFM
+		die "can't happen; no image object" unless $pen->can('image');
+		$pen->image->polyline(
+		    points => [
+			map [ $pen->mmul($_) ],
+			[ 0  - $o, $descender ],
+			[ $w - $o, $descender ],
+			[ $w - $o, $ascender  ],
+			[ 0  - $o, $ascender  ],
+			[ 0  - $o, $descender ],
+		    ],
+		    color => Imager::Color->new(
+			map { ($_ >> 16) & 0xff, ($_ >> 8) & 0xff, $_  & 0xff }
+			0x87cefa, # .defcolor lightskyblue rgb #87cefa
+			# 0xb0e2ff, # .defcolor lightskyblue1 rgb #b0e2ff
+			# 0xa4d3ee, # .defcolor lightskyblue2 rgb #a4d3ee
+			# 0x8db6cd, # .defcolor lightskyblue3 rgb #8db6cd
+			# 0x607b8b, # .defcolor lightskyblue4 rgb #607b8b
+		    ), # sky blue
+		);
+		if ($afmfile) {
+		    # OTF
+		    my $llx = -$left_side_bearing{$n};
+		    my $lly = -$depth{$n};
+		    my $urx = $width{$n} + $right_side_bearing{$n};
+		    my $ury = $height{$n};
 		    $pen->image->polyline(
 			points => [
 			    map [ $pen->mmul($_) ],
@@ -877,17 +878,41 @@ sub read_otf_file_p2 {
 			    [ $llx, $ury ],
 			    [ $llx, $lly ],
 			],
-			color => Imager::Color->new(0, 255, 0), # green
+			color => Imager::Color->new(
+			    map { ($_ >> 16) & 0xff, ($_ >> 8) & 0xff, $_  & 0xff }
+			    0xffa500, # .defcolor orange rgb #ffa500
+			    #0xffa500, # .defcolor orange1 rgb #ffa500
+			    #0xee9a00, # .defcolor orange2 rgb #ee9a00
+			    #0xcd8500, # .defcolor orange3 rgb #cd8500
+			    #0x8b5a00, # .defcolor orange4 rgb #8b5a00
+			),
 		    );
 		}
-		my $cff = $otf->{'CFF '};
-		$cff->plot($gid, $pen);
+		# AFM
+		$pen->image->polyline(
+		    points => [
+			map [ $pen->mmul($_) ],
+			[ $llx, $lly ],
+			[ $urx, $lly ],
+			[ $urx, $ury ],
+			[ $llx, $ury ],
+			[ $llx, $lly ],
+		    ],
+		    color => Imager::Color->new(0, 255, 0), # green
+		);
+		$pen->plot($gid);
 		if ($pen->can('image')) {
 		    -d "tmp" or mkdir 'tmp';
 		    say STDERR "# writing ./tmp/$cid.png"; # xxxxx
 		    $pen->image->write(file => "./tmp/$cid.png");
 		}
-		die "can't verify\n" if $not_ok;
+		die "can't verify\n" if $not_ok; # xxxxx
+
+		# Using the Font::TTF::CFF_::Plot class to obtain the
+		# bounding box takes too long,
+		# so blessing the Font::TTF::CFF_::BBox.
+		bless $cff, 'Font::TTF::CFF_::BBox'; # xxxxx
+		$cff->bezier_extrema(1);
 	    }
 	}			# $opt_verify || !$afmfile
 
@@ -952,16 +977,13 @@ sub read_otf_file_p2 {
 	}
     }
 
-    if (%stdbbox) {
-	my $xMin = min(map $_->[0], values %stdbbox);
-	my $yMin = min(map $_->[1], values %stdbbox);
-	my $xMax = max(map $_->[2], values %stdbbox);
-	my $yMax = max(map $_->[3], values %stdbbox);
-	$fontbbox = [ $xMin, $yMin, $xMax, $yMax ];
+    for ($fontbbox2) {
+	$fontbbox //= $_ if defined;
     }
 
 } # end of read_otf_file
 
+=begin comment
 
 sub InCJKIdeographs {
     join '', map { sprintf "%04X\t%04X\n", $_->[0], $_->[1] }
@@ -982,6 +1004,9 @@ sub grep_charblocks {
     ];
 }
 
+=end comment
+
+=cut
 
 sub get_name {
     my ($otf, $number, $platform_id, $encoding_id, $language_id) = @_;
